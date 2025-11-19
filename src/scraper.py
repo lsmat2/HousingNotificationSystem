@@ -88,20 +88,24 @@ class ApartmentsScraper:
             Full search URL with filters in path
         """
         # Clean and format location for URL
-        # Apartments.com uses format like: /san-francisco-ca/
         location_slug = location.lower()
         location_slug = re.sub(r'[^\w\s-]', '', location_slug)
         location_slug = re.sub(r'[\s_]+', '-', location_slug)
 
-        # Start with location
-        path_parts = [location_slug]
-
-        # Add neighborhood if specified (e.g., /chicago-il/lincoln-park/)
+        # If neighborhood is specified, Apartments.com format is:
+        # /neighborhood-city-state/ (e.g., /lincoln-park-chicago-il/)
+        # Otherwise just: /city-state/ (e.g., /chicago-il/)
         if neighborhood:
             neighborhood_slug = neighborhood.lower()
             neighborhood_slug = re.sub(r'[^\w\s-]', '', neighborhood_slug)
             neighborhood_slug = re.sub(r'[\s_]+', '-', neighborhood_slug)
-            path_parts.append(neighborhood_slug)
+            # Combine neighborhood with location
+            base_location = f"{neighborhood_slug}-{location_slug}"
+        else:
+            base_location = location_slug
+
+        # Start with the base location
+        path_parts = [base_location]
 
         # Build filter path segments
         filter_parts = []
