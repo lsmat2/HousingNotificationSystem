@@ -4,9 +4,8 @@ Fetches and parses housing listings based on search criteria.
 Uses Selenium for JavaScript-rendered content.
 """
 
-from selenium import webdriver
+import undetected_chromedriver as uc
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from bs4 import BeautifulSoup
 import time
 import logging
@@ -39,23 +38,33 @@ class ApartmentsScraper:
         self.driver = None
 
     def _init_driver(self):
-        """Initialize Selenium WebDriver."""
+        """Initialize Undetected Chrome WebDriver (bypasses bot detection)."""
         if self.driver is not None:
             return
 
-        chrome_options = Options()
-        chrome_options.add_argument('--headless')  # Run in background
+        chrome_options = uc.ChromeOptions()
+        # Note: headless mode can trigger detection, using visible browser
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument(f'user-agent={self.config.user_agent}')
+        chrome_options.add_argument('--window-size=1920,1080')
+        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
 
         try:
-            self.driver = webdriver.Chrome(options=chrome_options)
-            logger.info("✓ Chrome WebDriver initialized")
+            # Use undetected_chromedriver to avoid bot detection
+            # headless=False for better compatibility (window runs in background on macOS)
+            # use_subprocess=True for better stability
+            self.driver = uc.Chrome(
+                options=chrome_options,
+                version_main=None,
+                headless=False,
+                use_subprocess=True
+            )
+            logger.info("✓ Undetected Chrome WebDriver initialized")
+            # Give driver a moment to stabilize
+            time.sleep(1)
         except Exception as e:
             logger.error(f"Failed to initialize Chrome WebDriver: {e}")
-            logger.error("Make sure ChromeDriver is installed: brew install chromedriver")
+            logger.error("Make sure Chrome browser is installed")
             raise
 
     def _close_driver(self):
@@ -160,6 +169,9 @@ class ApartmentsScraper:
 
         except Exception as e:
             logger.error(f"Error fetching {url}: {e}")
+
+            # Close the driver if it's in a bad state
+            self._close_driver()
 
             if retry_count < self.config.max_retries:
                 wait_time = 2 ** retry_count  # Exponential backoff

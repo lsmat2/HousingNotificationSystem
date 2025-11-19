@@ -3,6 +3,7 @@ requests==2.31.0
 beautifulsoup4==4.12.3
 lxml==5.1.0
 selenium==4.16.0
+undetected-chromedriver==3.5.5
 
 # Database
 # sqlite3 is built-in with Python, no installation needed
