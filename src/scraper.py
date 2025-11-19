@@ -65,7 +65,7 @@ class ApartmentsScraper:
             self.driver = None
             logger.info("✓ Chrome WebDriver closed")
 
-    def build_search_url(self, location: str, page: int = 1) -> str:
+    def build_search_url(self, location: str, page: int = 1, neighborhood: str = None) -> str:
         """
         Build Apartments.com search URL from location string.
         Includes bedroom and price filters from config in URL path.
@@ -73,6 +73,7 @@ class ApartmentsScraper:
         Args:
             location: Location string (e.g., "San Francisco, CA")
             page: Page number for pagination
+            neighborhood: Optional neighborhood name (e.g., "lincoln-park", "wicker-park")
 
         Returns:
             Full search URL with filters in path
@@ -82,6 +83,16 @@ class ApartmentsScraper:
         location_slug = location.lower()
         location_slug = re.sub(r'[^\w\s-]', '', location_slug)
         location_slug = re.sub(r'[\s_]+', '-', location_slug)
+
+        # Start with location
+        path_parts = [location_slug]
+
+        # Add neighborhood if specified (e.g., /chicago-il/lincoln-park/)
+        if neighborhood:
+            neighborhood_slug = neighborhood.lower()
+            neighborhood_slug = re.sub(r'[^\w\s-]', '', neighborhood_slug)
+            neighborhood_slug = re.sub(r'[\s_]+', '-', neighborhood_slug)
+            path_parts.append(neighborhood_slug)
 
         # Build filter path segments
         filter_parts = []
@@ -94,8 +105,7 @@ class ApartmentsScraper:
             else:
                 filter_parts.append(f"{self.config.min_bedrooms}-bedrooms")
 
-        # Combine location with filters
-        path_parts = [location_slug]
+        # Add filters to path
         path_parts.extend(filter_parts)
 
         # Add page number if > 1
@@ -318,39 +328,65 @@ class ApartmentsScraper:
     def scrape_listings(self, max_pages: int = 3) -> List[Dict]:
         """
         Scrape listings from Apartments.com.
+        If neighborhoods are configured, searches each neighborhood separately.
 
         Args:
-            max_pages: Maximum number of pages to scrape
+            max_pages: Maximum number of pages to scrape per neighborhood
 
         Returns:
             List of all scraped listings
         """
         all_listings = []
         location = self.config.location
+        neighborhoods = self.config.neighborhoods
 
-        logger.info(f"Starting scrape for location: {location}")
+        # Determine search targets
+        if neighborhoods:
+            logger.info(f"Starting scrape for {len(neighborhoods)} neighborhoods in {location}")
+            search_targets = [(location, neighborhood) for neighborhood in neighborhoods]
+        else:
+            logger.info(f"Starting scrape for location: {location} (all neighborhoods)")
+            search_targets = [(location, None)]
 
         try:
-            for page in range(1, max_pages + 1):
-                url = self.build_search_url(location, page)
-                html = self.fetch_page(url)
+            # Scrape each neighborhood (or entire city if no neighborhoods specified)
+            for location, neighborhood in search_targets:
+                if neighborhood:
+                    logger.info(f"Scraping neighborhood: {neighborhood}")
 
-                if not html:
-                    logger.warning(f"Failed to fetch page {page}, stopping pagination")
-                    break
+                neighborhood_listings = []
 
-                listings = self.parse_listings(html, url)
+                for page in range(1, max_pages + 1):
+                    url = self.build_search_url(location, page, neighborhood)
+                    html = self.fetch_page(url)
 
-                if not listings:
-                    logger.info(f"No listings found on page {page}, stopping pagination")
-                    break
+                    if not html:
+                        logger.warning(f"Failed to fetch page {page}, stopping pagination")
+                        break
 
-                all_listings.extend(listings)
-                logger.info(f"Page {page}: Found {len(listings)} listings")
+                    listings = self.parse_listings(html, url)
 
-                # Be respectful with rate limiting between pages
-                if page < max_pages:
-                    time.sleep(3)
+                    if not listings:
+                        logger.info(f"No listings found on page {page}, stopping pagination")
+                        break
+
+                    neighborhood_listings.extend(listings)
+                    logger.info(f"Page {page}: Found {len(listings)} listings")
+
+                    # Be respectful with rate limiting between pages
+                    if page < max_pages:
+                        time.sleep(3)
+
+                # Log neighborhood summary
+                if neighborhood:
+                    logger.info(f"Neighborhood '{neighborhood}': {len(neighborhood_listings)} listings found")
+
+                all_listings.extend(neighborhood_listings)
+
+                # Wait between neighborhoods
+                if len(search_targets) > 1 and (location, neighborhood) != search_targets[-1]:
+                    logger.info("Waiting before next neighborhood...")
+                    time.sleep(5)
 
         finally:
             # Always close the browser

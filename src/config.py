@@ -72,6 +72,11 @@ class Config:
         return self.get('search_criteria.location', '')
 
     @property
+    def neighborhoods(self) -> list:
+        """Get list of neighborhoods to search within."""
+        return self.get('search_criteria.neighborhoods', [])
+
+    @property
     def min_price(self) -> Optional[float]:
         """Get minimum price."""
         return self.get('search_criteria.price_range.min')

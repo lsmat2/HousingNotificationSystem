@@ -152,6 +152,7 @@ To check for new listings periodically, use cron (Linux/Mac) or Task Scheduler (
 | Setting | Description | Example |
 |---------|-------------|---------|
 | `location` | City and state to search | `"Seattle, WA"` |
+| `neighborhoods` | Specific neighborhoods to search (optional) | `["lincoln-park", "wicker-park"]` |
 | `price_range.min` | Minimum monthly rent | `1200` |
 | `price_range.max` | Maximum monthly rent | `2500` |
 | `bedrooms.min` | Minimum bedrooms | `1` |
@@ -159,7 +160,11 @@ To check for new listings periodically, use cron (Linux/Mac) or Task Scheduler (
 | `bathrooms.min` | Minimum bathrooms | `1` |
 | `bathrooms.max` | Maximum bathrooms | `2.5` |
 
-Use `null` for any range value to make it unlimited (e.g., "at least 2 bedrooms, no maximum").
+**Notes:**
+- Use `null` for any range value to make it unlimited (e.g., "at least 2 bedrooms, no maximum")
+- Leave `neighborhoods` as an empty array `[]` to search the entire city
+- Use neighborhood slugs (lowercase with hyphens): `"lincoln-park"` not `"Lincoln Park"`
+- See [CHICAGO_NEIGHBORHOODS.md](CHICAGO_NEIGHBORHOODS.md) for a full list of Chicago neighborhoods
 
 ### Scraper Settings
 
