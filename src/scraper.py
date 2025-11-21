@@ -185,13 +185,14 @@ class ApartmentsScraper:
 
             return None
 
-    def parse_listings(self, html: str, base_url: str) -> List[Dict]:
+    def parse_listings(self, html: str, base_url: str, neighborhood: str = None) -> List[Dict]:
         """
         Parse listings from HTML content.
 
         Args:
             html: HTML content from Apartments.com
             base_url: Base URL for resolving relative links
+            neighborhood: Optional neighborhood name for tracking
 
         Returns:
             List of parsed listing dictionaries
@@ -211,7 +212,7 @@ class ApartmentsScraper:
 
         for container in listing_containers:
             try:
-                listing = self._parse_single_listing(container, base_url)
+                listing = self._parse_single_listing(container, base_url, neighborhood)
                 if listing:
                     listings.append(listing)
             except Exception as e:
@@ -220,13 +221,14 @@ class ApartmentsScraper:
 
         return listings
 
-    def _parse_single_listing(self, container, base_url: str) -> Optional[Dict]:
+    def _parse_single_listing(self, container, base_url: str, neighborhood: str = None) -> Optional[Dict]:
         """
         Parse a single listing from its HTML container.
 
         Args:
             container: BeautifulSoup element containing listing data
             base_url: Base URL for resolving relative links
+            neighborhood: Optional neighborhood name for tracking
 
         Returns:
             Listing dictionary or None if parsing failed
@@ -251,6 +253,9 @@ class ApartmentsScraper:
         # Extract address
         address_elem = container.select_one('.property-address')
         listing['address'] = address_elem.get_text(strip=True) if address_elem else None
+
+        # Store neighborhood if provided
+        listing['neighborhood'] = neighborhood
 
         # Extract price - Apartments.com uses .priceTextBox for prices
         # There may be multiple prices for different bedroom counts
@@ -380,7 +385,7 @@ class ApartmentsScraper:
                         logger.warning(f"Failed to fetch page {page}, stopping pagination")
                         break
 
-                    listings = self.parse_listings(html, url)
+                    listings = self.parse_listings(html, url, neighborhood)
 
                     if not listings:
                         logger.info(f"No listings found on page {page}, stopping pagination")

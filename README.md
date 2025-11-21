@@ -5,7 +5,10 @@ A Python-based system that monitors Apartments.com for housing listings matching
 ## Features
 
 - **Automated Scraping**: Periodically scrapes Apartments.com for new listings
+- **Neighborhood Targeting**: Search specific Chicago neighborhoods for more relevant results
 - **Smart Filtering**: Filter by location, price range, bedrooms, and bathrooms
+- **Web UI**: Simple browser interface to view, track, and favorite listings (NEW!)
+- **Tracking Duration**: See how long each listing has been available
 - **Deduplication**: Tracks seen listings to avoid duplicate notifications
 - **Persistent Storage**: SQLite database for reliable listing history
 - **Extensible Notifications**: Console output with framework for SMS integration
@@ -94,6 +97,26 @@ This will:
 3. Identify new listings not seen before
 4. Display notifications in the console
 5. Save listings to the database
+
+### Web UI
+
+View and manage your listings in a browser:
+
+```bash
+python src/web_ui.py
+```
+
+Then open http://127.0.0.1:5000 in your browser.
+
+The web UI provides:
+- **Visual listing cards** with all property details
+- **Duration tracking** showing how long each listing has been available
+- **Favorite system** to star listings you're interested in
+- **Filtering** between all listings and favorites only
+- **Sorting** by date or price
+- **Expandable details** for full information on each listing
+
+See [WEB_UI_GUIDE.md](WEB_UI_GUIDE.md) for detailed usage instructions.
 
 ### Command-Line Options
 

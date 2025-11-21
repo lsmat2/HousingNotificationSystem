@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Housing Listings Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Housing Listings Tracker</h1>
+        <div class="stats">
+            <span class="stat">Total: <strong>{{ stats.total_listings }}</strong></span>
+            <span class="stat">Favorites: <strong>{{ stats.favorited_listings }}</strong></span>
+            <span class="stat">New: <strong>{{ stats.unnotified_listings }}</strong></span>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="controls">
+            <div class="filters">
+                <a href="?favorites=false&sort={{ sort_by }}"
+                   class="filter-btn {% if not show_favorites %}active{% endif %}">
+                    All Listings
+                </a>
+                <a href="?favorites=true&sort={{ sort_by }}"
+                   class="filter-btn {% if show_favorites %}active{% endif %}">
+                    Favorites
+                </a>
+            </div>
+
+            <div class="sort">
+                <label for="sort-select">Sort by:</label>
+                <select id="sort-select" onchange="updateSort(this.value)">
+                    <option value="newest" {% if sort_by == 'newest' %}selected{% endif %}>Newest First</option>
+                    <option value="oldest" {% if sort_by == 'oldest' %}selected{% endif %}>Oldest First</option>
+                    <option value="price_high" {% if sort_by == 'price_high' %}selected{% endif %}>Price (High to Low)</option>
+                    <option value="price_low" {% if sort_by == 'price_low' %}selected{% endif %}>Price (Low to High)</option>
+                </select>
+            </div>
+        </div>
+
+        {% if neighborhoods %}
+            {% for neighborhood, listings in neighborhoods.items() %}
+            <div class="neighborhood-section">
+                <h2 class="neighborhood-title">
+                    {{ neighborhood.title() if neighborhood != 'Unknown' else 'Other Neighborhoods' }}
+                    <span class="neighborhood-count">({{ listings|length }})</span>
+                </h2>
+
+                <div class="listings-grid">
+                    {% for listing in listings %}
+                    <div class="listing-card-compact" data-listing-id="{{ listing.listing_id }}">
+                        <div class="card-header-compact" onclick="toggleDetails('{{ listing.listing_id }}')">
+                            <div class="listing-title-compact">{{ listing.title or 'Untitled Listing' }}</div>
+
+                            <div class="listing-info-row">
+                                <span class="price-compact">
+                                    {% if listing.price %}
+                                        ${{ '{:,.0f}'.format(listing.price) }}
+                                    {% else %}
+                                        Price N/A
+                                    {% endif %}
+                                </span>
+                                <span class="separator">•</span>
+                                <span class="beds-compact">
+                                    {% if listing.bedrooms == 0 %}
+                                        Studio
+                                    {% elif listing.bedrooms %}
+                                        {{ listing.bedrooms|int }}bd
+                                    {% else %}
+                                        -bd
+                                    {% endif %}
+                                </span>
+                                {% if listing.bathrooms %}
+                                <span class="separator">•</span>
+                                <span class="baths-compact">{{ listing.bathrooms }}ba</span>
+                                {% endif %}
+                                <span class="separator">•</span>
+                                <span class="duration-compact {{ listing.duration.color }}">
+                                    {{ listing.duration.text }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="card-actions-compact">
+                            <button class="favorite-btn-compact {% if listing.favorited %}favorited{% endif %}"
+                                    onclick="toggleFavorite(event, '{{ listing.listing_id }}')">
+                                <span class="star">{% if listing.favorited %}★{% else %}☆{% endif %}</span>
+                            </button>
+                            <button class="expand-btn-compact">
+                                <span class="arrow">▼</span>
+                            </button>
+                        </div>
+
+                        <div class="card-details-compact" id="details-{{ listing.listing_id }}" style="display: none;">
+                            <div class="detail-row">
+                                <strong>Address:</strong> {{ listing.address or 'Not specified' }}
+                            </div>
+                            {% if listing.square_feet %}
+                            <div class="detail-row">
+                                <strong>Size:</strong> {{ '{:,.0f}'.format(listing.square_feet) }} sq ft
+                            </div>
+                            {% endif %}
+                            {% if listing.availability_date %}
+                            <div class="detail-row">
+                                <strong>Available:</strong> {{ listing.availability_date }}
+                            </div>
+                            {% endif %}
+                            <div class="detail-row">
+                                <strong>First Seen:</strong> {{ listing.first_seen }}
+                            </div>
+                            <div class="detail-row">
+                                <strong>Last Seen:</strong> {{ listing.last_seen }}
+                            </div>
+                            <div class="detail-row">
+                                <strong>Notified:</strong> {% if listing.notified %}Yes{% else %}No{% endif %}
+                            </div>
+                            <div class="detail-row">
+                                <strong>URL:</strong> <a href="{{ listing.url }}" target="_blank" class="listing-link">View on Apartments.com →</a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="empty-state">
+            <p>No listings found.</p>
+            {% if show_favorites %}
+            <p><a href="?favorites=false">View all listings</a></p>
+            {% else %}
+            <p>Run the scraper to find listings: <code>python -m src.main</code></p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function toggleDetails(listingId) {
+            const details = document.getElementById('details-' + listingId);
+            const arrow = details.parentElement.querySelector('.arrow');
+
+            if (details.style.display === 'none') {
+                details.style.display = 'block';
+                arrow.textContent = '▲';
+            } else {
+                details.style.display = 'none';
+                arrow.textContent = '▼';
+            }
+        }
+
+        function toggleFavorite(event, listingId) {
+            event.stopPropagation();
+
+            fetch(`/toggle_favorite/${listingId}`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const btn = event.currentTarget;
+                    const star = btn.querySelector('.star');
+
+                    if (data.favorited) {
+                        btn.classList.add('favorited');
+                        star.textContent = '★';
+                    } else {
+                        btn.classList.remove('favorited');
+                        star.textContent = '☆';
+                    }
+
+                    // Update stats
+                    location.reload();
+                }
+            });
+        }
+
+        function updateSort(value) {
+            const params = new URLSearchParams(window.location.search);
+            params.set('sort', value);
+            window.location.search = params.toString();
+        }
+    </script>
+</body>
+</html>

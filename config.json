@@ -1,7 +1,7 @@
 {
   "search_criteria": {
     "location": "Chicago, IL",
-    "neighborhoods": [],
+    "neighborhoods": ["lincoln-park", "lakeview", "wicker-park"],
     "price_range": {
       "min": 1500,
       "max": 4500
