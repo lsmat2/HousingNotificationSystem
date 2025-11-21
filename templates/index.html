@@ -51,46 +51,48 @@
                 <div class="listings-grid">
                     {% for listing in listings %}
                     <div class="listing-card-compact" data-listing-id="{{ listing.listing_id }}">
-                        <div class="card-header-compact" onclick="toggleDetails('{{ listing.listing_id }}')">
-                            <div class="listing-title-compact">{{ listing.title or 'Untitled Listing' }}</div>
+                        <div class="card-top-row">
+                            <div class="card-header-compact" onclick="toggleDetails('{{ listing.listing_id }}')">
+                                <div class="listing-title-compact">{{ listing.title or 'Untitled Listing' }}</div>
 
-                            <div class="listing-info-row">
-                                <span class="price-compact">
-                                    {% if listing.price %}
-                                        ${{ '{:,.0f}'.format(listing.price) }}
-                                    {% else %}
-                                        Price N/A
+                                <div class="listing-info-row">
+                                    <span class="price-compact">
+                                        {% if listing.price %}
+                                            ${{ '{:,.0f}'.format(listing.price) }}
+                                        {% else %}
+                                            Price N/A
+                                        {% endif %}
+                                    </span>
+                                    <span class="separator">•</span>
+                                    <span class="beds-compact">
+                                        {% if listing.bedrooms == 0 %}
+                                            Studio
+                                        {% elif listing.bedrooms %}
+                                            {{ listing.bedrooms|int }}bd
+                                        {% else %}
+                                            -bd
+                                        {% endif %}
+                                    </span>
+                                    {% if listing.bathrooms %}
+                                    <span class="separator">•</span>
+                                    <span class="baths-compact">{{ listing.bathrooms }}ba</span>
                                     {% endif %}
-                                </span>
-                                <span class="separator">•</span>
-                                <span class="beds-compact">
-                                    {% if listing.bedrooms == 0 %}
-                                        Studio
-                                    {% elif listing.bedrooms %}
-                                        {{ listing.bedrooms|int }}bd
-                                    {% else %}
-                                        -bd
-                                    {% endif %}
-                                </span>
-                                {% if listing.bathrooms %}
-                                <span class="separator">•</span>
-                                <span class="baths-compact">{{ listing.bathrooms }}ba</span>
-                                {% endif %}
-                                <span class="separator">•</span>
-                                <span class="duration-compact {{ listing.duration.color }}">
-                                    {{ listing.duration.text }}
-                                </span>
+                                    <span class="separator">•</span>
+                                    <span class="duration-compact {{ listing.duration.color }}">
+                                        {{ listing.duration.text }}
+                                    </span>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="card-actions-compact">
-                            <button class="favorite-btn-compact {% if listing.favorited %}favorited{% endif %}"
-                                    onclick="toggleFavorite(event, '{{ listing.listing_id }}')">
-                                <span class="star">{% if listing.favorited %}★{% else %}☆{% endif %}</span>
-                            </button>
-                            <button class="expand-btn-compact">
-                                <span class="arrow">▼</span>
-                            </button>
+                            <div class="card-actions-compact">
+                                <button class="favorite-btn-compact {% if listing.favorited %}favorited{% endif %}"
+                                        onclick="toggleFavorite(event, '{{ listing.listing_id }}')">
+                                    <span class="star">{% if listing.favorited %}★{% else %}☆{% endif %}</span>
+                                </button>
+                                <button class="expand-btn-compact">
+                                    <span class="arrow">▼</span>
+                                </button>
+                            </div>
                         </div>
 
                         <div class="card-details-compact" id="details-{{ listing.listing_id }}" style="display: none;">
