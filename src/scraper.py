@@ -13,6 +13,8 @@ from typing import List, Dict, Optional
 from urllib.parse import urljoin
 import re
 import hashlib
+import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.config import Config
 
@@ -43,7 +45,6 @@ class ApartmentsScraper:
             return
 
         chrome_options = uc.ChromeOptions()
-        # Note: headless mode can trigger detection, using visible browser
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--window-size=1920,1080')
@@ -51,15 +52,15 @@ class ApartmentsScraper:
 
         try:
             # Use undetected_chromedriver to avoid bot detection
-            # headless=False for better compatibility (window runs in background on macOS)
             # use_subprocess=True for better stability
             self.driver = uc.Chrome(
                 options=chrome_options,
                 version_main=None,
-                headless=False,
+                headless=self.config.headless,
                 use_subprocess=True
             )
-            logger.info("✓ Undetected Chrome WebDriver initialized")
+            mode = "headless" if self.config.headless else "visible"
+            logger.info(f"✓ Undetected Chrome WebDriver initialized ({mode} mode)")
             # Give driver a moment to stabilize
             time.sleep(1)
         except Exception as e:
@@ -76,8 +77,9 @@ class ApartmentsScraper:
 
     def build_search_url(self, location: str, page: int = 1, neighborhood: str = None) -> str:
         """
-        Build Apartments.com search URL from location string.
-        Includes bedroom and price filters from config in URL path.
+        Build Apartments.com search URL with filters in the path.
+        Includes bedroom, bathroom, and price filters from config.
+        Example: /roscoe-village-chicago-il/4-bedrooms-3-bathrooms-1500-to-4500/
 
         Args:
             location: Location string (e.g., "San Francisco, CA")
@@ -107,19 +109,37 @@ class ApartmentsScraper:
         # Start with the base location
         path_parts = [base_location]
 
-        # Build filter path segments
-        filter_parts = []
+        # Build filter path segment (all filters connected with dashes)
+        # Apartments.com format: /{bedrooms}-{bathrooms}-{price}/
+        # Example: /4-bedrooms-3-bathrooms-under-4000/
+        filter_components = []
 
-        # Add bedroom filter as path segment
-        # Apartments.com format: /3-bedrooms/ or /3-to-5-bedrooms/
+        # Add bedroom filter
         if self.config.min_bedrooms is not None:
             if self.config.max_bedrooms and self.config.max_bedrooms != self.config.min_bedrooms:
-                filter_parts.append(f"{self.config.min_bedrooms}-to-{self.config.max_bedrooms}-bedrooms")
+                filter_components.append(f"{self.config.min_bedrooms}-to-{self.config.max_bedrooms}-bedrooms")
             else:
-                filter_parts.append(f"{self.config.min_bedrooms}-bedrooms")
+                filter_components.append(f"{self.config.min_bedrooms}-bedrooms")
 
-        # Add filters to path
-        path_parts.extend(filter_parts)
+        # Add bathroom filter
+        if self.config.min_bathrooms is not None:
+            if self.config.max_bathrooms and self.config.max_bathrooms != self.config.min_bathrooms:
+                filter_components.append(f"{int(self.config.min_bathrooms)}-to-{int(self.config.max_bathrooms)}-bathrooms")
+            else:
+                filter_components.append(f"{int(self.config.min_bathrooms)}-bathrooms")
+
+        # Add price filter
+        # Format: "under-4000", "1500-to-4500", "over-1500"
+        if self.config.min_price is not None and self.config.max_price is not None:
+            filter_components.append(f"{int(self.config.min_price)}-to-{int(self.config.max_price)}")
+        elif self.config.max_price is not None:
+            filter_components.append(f"under-{int(self.config.max_price)}")
+        elif self.config.min_price is not None:
+            filter_components.append(f"over-{int(self.config.min_price)}")
+
+        # Combine all filter components with dashes into a single path segment
+        if filter_components:
+            path_parts.append("-".join(filter_components))
 
         # Add page number if > 1
         if page > 1:
@@ -128,20 +148,7 @@ class ApartmentsScraper:
         # Build final path
         path = "/".join(path_parts) + "/"
 
-        # Add price as query parameters (these typically work as query params)
-        query_params = []
-        if self.config.min_price is not None or self.config.max_price is not None:
-            price_parts = []
-            if self.config.min_price:
-                price_parts.append(f"min-{int(self.config.min_price)}")
-            if self.config.max_price:
-                price_parts.append(f"max-{int(self.config.max_price)}")
-            if price_parts:
-                query_params.append("-".join(price_parts))
-
         url = f"{self.BASE_URL}/{path}"
-        if query_params:
-            url += "?" + "&".join(query_params)
 
         return url
 
@@ -346,10 +353,64 @@ class ApartmentsScraper:
 
         return None
 
+    def _scrape_single_neighborhood(self, location: str, neighborhood: Optional[str], max_pages: int) -> List[Dict]:
+        """
+        Scrape a single neighborhood (or entire location if neighborhood is None).
+        This method creates its own driver instance for parallel execution.
+
+        Args:
+            location: Location string (e.g., "Chicago, IL")
+            neighborhood: Optional neighborhood name
+            max_pages: Maximum number of pages to scrape
+
+        Returns:
+            List of listings for this neighborhood
+        """
+        # Create a new scraper instance with its own driver for parallel execution
+        scraper = ApartmentsScraper(self.config)
+
+        try:
+            if neighborhood:
+                logger.info(f"Scraping neighborhood: {neighborhood}")
+
+            neighborhood_listings = []
+
+            for page in range(1, max_pages + 1):
+                url = scraper.build_search_url(location, page, neighborhood)
+                html = scraper.fetch_page(url)
+
+                if not html:
+                    logger.warning(f"[{neighborhood or 'all'}] Failed to fetch page {page}, stopping pagination")
+                    break
+
+                listings = scraper.parse_listings(html, url, neighborhood)
+
+                if not listings:
+                    logger.info(f"[{neighborhood or 'all'}] No listings found on page {page}, stopping pagination")
+                    break
+
+                neighborhood_listings.extend(listings)
+                logger.info(f"[{neighborhood or 'all'}] Page {page}: Found {len(listings)} listings")
+
+                # Rate limiting between pages
+                if page < max_pages:
+                    time.sleep(3)
+
+            # Log neighborhood summary
+            if neighborhood:
+                logger.info(f"Neighborhood '{neighborhood}': {len(neighborhood_listings)} listings found")
+
+            return neighborhood_listings
+
+        finally:
+            # Always close the browser for this neighborhood
+            scraper._close_driver()
+
     def scrape_listings(self, max_pages: int = 3) -> List[Dict]:
         """
         Scrape listings from Apartments.com.
         If neighborhoods are configured, searches each neighborhood separately.
+        Supports parallel scraping when enabled in config.
 
         Args:
             max_pages: Maximum number of pages to scrape per neighborhood
@@ -369,49 +430,153 @@ class ApartmentsScraper:
             logger.info(f"Starting scrape for location: {location} (all neighborhoods)")
             search_targets = [(location, None)]
 
-        try:
-            # Scrape each neighborhood (or entire city if no neighborhoods specified)
-            for location, neighborhood in search_targets:
-                if neighborhood:
-                    logger.info(f"Scraping neighborhood: {neighborhood}")
+        # Check if parallel scraping is enabled
+        if self.config.parallel_neighborhoods and len(search_targets) > 1:
+            logger.info(f"Using parallel scraping for {len(search_targets)} neighborhoods")
 
-                neighborhood_listings = []
+            # Use ThreadPoolExecutor for parallel scraping
+            with ThreadPoolExecutor(max_workers=len(search_targets)) as executor:
+                # Submit all neighborhood scraping tasks
+                future_to_neighborhood = {
+                    executor.submit(self._scrape_single_neighborhood, loc, neighborhood, max_pages): neighborhood
+                    for loc, neighborhood in search_targets
+                }
 
-                for page in range(1, max_pages + 1):
-                    url = self.build_search_url(location, page, neighborhood)
-                    html = self.fetch_page(url)
+                # Collect results as they complete
+                for future in as_completed(future_to_neighborhood):
+                    neighborhood = future_to_neighborhood[future]
+                    try:
+                        listings = future.result()
+                        all_listings.extend(listings)
+                    except Exception as e:
+                        logger.error(f"Error scraping neighborhood '{neighborhood}': {e}")
 
-                    if not html:
-                        logger.warning(f"Failed to fetch page {page}, stopping pagination")
-                        break
+        else:
+            # Sequential scraping (original behavior)
+            try:
+                for location, neighborhood in search_targets:
+                    neighborhood_listings = self._scrape_single_neighborhood(location, neighborhood, max_pages)
+                    all_listings.extend(neighborhood_listings)
 
-                    listings = self.parse_listings(html, url, neighborhood)
+                    # Wait between neighborhoods in sequential mode
+                    if len(search_targets) > 1 and (location, neighborhood) != search_targets[-1]:
+                        logger.info("Waiting before next neighborhood...")
+                        time.sleep(5)
 
-                    if not listings:
-                        logger.info(f"No listings found on page {page}, stopping pagination")
-                        break
-
-                    neighborhood_listings.extend(listings)
-                    logger.info(f"Page {page}: Found {len(listings)} listings")
-
-                    # Be respectful with rate limiting between pages
-                    if page < max_pages:
-                        time.sleep(3)
-
-                # Log neighborhood summary
-                if neighborhood:
-                    logger.info(f"Neighborhood '{neighborhood}': {len(neighborhood_listings)} listings found")
-
-                all_listings.extend(neighborhood_listings)
-
-                # Wait between neighborhoods
-                if len(search_targets) > 1 and (location, neighborhood) != search_targets[-1]:
-                    logger.info("Waiting before next neighborhood...")
-                    time.sleep(5)
-
-        finally:
-            # Always close the browser
-            self._close_driver()
+            finally:
+                # Close driver if it was used
+                self._close_driver()
 
         logger.info(f"Scraping complete. Total listings found: {len(all_listings)}")
         return all_listings
+
+    def scrape_listing_details(self, url: str) -> Optional[Dict]:
+        """
+        Scrape detailed information from an individual listing page.
+
+        Args:
+            url: URL of the individual listing
+
+        Returns:
+            Dictionary with detailed listing information, or None if failed
+        """
+        try:
+            self._init_driver()
+
+            html = self.fetch_page(url)
+            if not html:
+                return None
+
+            soup = BeautifulSoup(html, 'lxml')
+            details = {}
+
+            # Extract price from detail page
+            price_elem = soup.select_one('span.propertyName.propertyNamePropRes')
+            if price_elem:
+                price_text = price_elem.get_text(strip=True)
+                details['price'] = self._parse_price(price_text)
+
+            # Extract address from h1
+            address_elem = soup.select_one('h1')
+            if address_elem:
+                details['address'] = address_elem.get_text(strip=True)
+
+            # Extract bedrooms and bathrooms from priceBedRangeInfo
+            bed_bath_items = soup.select('.priceBedRangeInfo li')
+            for item in bed_bath_items:
+                text = item.get_text(strip=True)
+                if text.startswith('Bedrooms'):
+                    bed_text = text.replace('Bedrooms', '')
+                    details['bedrooms'] = self._parse_number(bed_text)
+                elif text.startswith('Bathrooms'):
+                    bath_text = text.replace('Bathrooms', '')
+                    details['bathrooms'] = self._parse_number(bath_text)
+                elif text.startswith('Square Feet'):
+                    sqft_text = text.replace('Square Feet', '').replace('sq ft', '')
+                    details['square_feet'] = self._parse_number(sqft_text)
+
+            # Extract pet policy
+            pet_elem = soup.select_one('.component-body.pet-fees')
+            if pet_elem:
+                pet_text = pet_elem.get_text(strip=True)
+                details['pets_allowed'] = 'Allowed' in pet_text or 'Dogs' in pet_text or 'Cats' in pet_text
+
+            logger.info(f"Detail scrape successful for {url}")
+            return details
+
+        except Exception as e:
+            logger.error(f"Error scraping details from {url}: {e}")
+            return None
+        finally:
+            self._close_driver()
+
+    def enrich_listings_with_details(self, listings: List[Dict]) -> List[Dict]:
+        """
+        Enrich listings that are missing critical data by scraping detail pages.
+
+        Args:
+            listings: List of listing dictionaries
+
+        Returns:
+            List of enriched listings
+        """
+        enriched_count = 0
+
+        for listing in listings:
+            # Check if listing needs enrichment (missing price or bedrooms)
+            needs_enrichment = (
+                listing.get('price') is None or
+                listing.get('bedrooms') is None or
+                listing.get('address') is None
+            )
+
+            if needs_enrichment:
+                logger.info(f"Enriching listing: {listing.get('title', 'Unknown')}")
+                details = self.scrape_listing_details(listing['url'])
+
+                if details:
+                    # Update listing with details
+                    if 'price' in details and details['price']:
+                        listing['price'] = details['price']
+                    if 'bedrooms' in details and details['bedrooms']:
+                        listing['bedrooms'] = details['bedrooms']
+                    if 'bathrooms' in details and details['bathrooms']:
+                        listing['bathrooms'] = details['bathrooms']
+                    if 'address' in details and details['address']:
+                        listing['address'] = details['address']
+                    if 'square_feet' in details and details['square_feet']:
+                        listing['square_feet'] = details['square_feet']
+                    if 'pets_allowed' in details:
+                        listing['pets_allowed'] = details['pets_allowed']
+
+                    enriched_count += 1
+
+                # Rate limiting with random jitter to avoid bot detection
+                delay = random.uniform(
+                    self.config.detail_page_delay_min,
+                    self.config.detail_page_delay_max
+                )
+                time.sleep(delay)
+
+        logger.info(f"Enriched {enriched_count} listings with detail page data")
+        return listings

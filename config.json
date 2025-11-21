@@ -1,17 +1,21 @@
 {
   "search_criteria": {
     "location": "Chicago, IL",
-    "neighborhoods": ["lincoln-park", "lakeview", "wicker-park"],
+    "neighborhoods": ["lincoln-park", "lakeview", "wicker-park", "roscoe-village"],
     "price_range": {
       "min": 1500,
       "max": 4500
     },
     "bedrooms": {
-      "min": 3,
+      "min": 4,
       "max": 5
     },
     "bathrooms": {
       "min": 3,
+      "max": null
+    },
+    "square_feet": {
+      "min": null,
       "max": null
     }
   },
@@ -19,7 +23,11 @@
     "check_interval_minutes": 30,
     "max_retries": 3,
     "timeout_seconds": 30,
-    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "headless": false,
+    "parallel_neighborhoods": true,
+    "detail_page_delay_min": 5,
+    "detail_page_delay_max": 10
   },
   "notification_settings": {
     "enabled": true,

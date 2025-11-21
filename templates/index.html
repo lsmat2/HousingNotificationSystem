@@ -77,6 +77,10 @@
                                     <span class="separator">•</span>
                                     <span class="baths-compact">{{ listing.bathrooms }}ba</span>
                                     {% endif %}
+                                    {% if listing.square_feet %}
+                                    <span class="separator">•</span>
+                                    <span class="sqft-compact">{{ '{:,.0f}'.format(listing.square_feet) }} sq ft</span>
+                                    {% endif %}
                                     <span class="separator">•</span>
                                     <span class="duration-compact {{ listing.duration.color }}">
                                         {{ listing.duration.text }}

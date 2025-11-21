@@ -42,6 +42,7 @@ class ListingDatabase:
                     bathrooms REAL,
                     square_feet INTEGER,
                     availability_date TEXT,
+                    pets_allowed BOOLEAN,
                     first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     notified BOOLEAN DEFAULT FALSE,
@@ -66,6 +67,7 @@ class ListingDatabase:
         # Add columns if they don't exist (for existing databases)
         self._add_favorited_column_if_needed()
         self._add_neighborhood_column_if_needed()
+        self._add_pets_allowed_column_if_needed()
 
     def _add_favorited_column_if_needed(self):
         """Add favorited column to existing databases."""
@@ -91,6 +93,19 @@ class ListingDatabase:
             if 'neighborhood' not in columns:
                 logger.info("Adding 'neighborhood' column to existing database")
                 cursor.execute("ALTER TABLE listings ADD COLUMN neighborhood TEXT")
+                conn.commit()
+
+    def _add_pets_allowed_column_if_needed(self):
+        """Add pets_allowed column to existing databases."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            # Check if column exists
+            cursor.execute("PRAGMA table_info(listings)")
+            columns = [col[1] for col in cursor.fetchall()]
+
+            if 'pets_allowed' not in columns:
+                logger.info("Adding 'pets_allowed' column to existing database")
+                cursor.execute("ALTER TABLE listings ADD COLUMN pets_allowed BOOLEAN")
                 conn.commit()
 
     def listing_exists(self, listing_id: str) -> bool:
@@ -121,9 +136,9 @@ class ListingDatabase:
             cursor.execute("""
                 INSERT INTO listings (
                     listing_id, url, title, address, neighborhood, price,
-                    bedrooms, bathrooms, square_feet, availability_date
+                    bedrooms, bathrooms, square_feet, availability_date, pets_allowed
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 listing['listing_id'],
                 listing['url'],
@@ -134,7 +149,8 @@ class ListingDatabase:
                 listing.get('bedrooms'),
                 listing.get('bathrooms'),
                 listing.get('square_feet'),
-                listing.get('availability_date')
+                listing.get('availability_date'),
+                listing.get('pets_allowed')
             ))
             conn.commit()
             return True

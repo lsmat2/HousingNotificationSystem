@@ -71,10 +71,14 @@ class HousingNotificationSystem:
 
         logger.info(f"Found {len(raw_listings)} total listings")
 
-        # Step 2: Filter listings
-        logger.info("\nStep 2: Applying filters...")
-        filtered_listings = self.filter.filter_listings(raw_listings)
-        filtered_out_count = len(raw_listings) - len(filtered_listings)
+        # Step 2: Enrich listings with detail page data (Phase 2)
+        logger.info("\nStep 2: Enriching listings with missing data...")
+        enriched_listings = self.scraper.enrich_listings_with_details(raw_listings)
+
+        # Step 3: Filter listings
+        logger.info("\nStep 3: Applying filters...")
+        filtered_listings = self.filter.filter_listings(enriched_listings)
+        filtered_out_count = len(enriched_listings) - len(filtered_listings)
 
         logger.info(f"Listings matching criteria: {len(filtered_listings)}")
         logger.info(f"Listings filtered out: {filtered_out_count}")
@@ -83,15 +87,15 @@ class HousingNotificationSystem:
             logger.info("No listings match your criteria.")
             return
 
-        # Step 3: Check for new listings
-        logger.info("\nStep 3: Checking for new listings...")
+        # Step 4: Check for new listings
+        logger.info("\nStep 4: Checking for new listings...")
         new_listings = self._identify_new_listings(filtered_listings, dry_run)
 
         logger.info(f"New listings (not seen before): {len(new_listings)}")
 
-        # Step 4: Send notifications
+        # Step 5: Send notifications
         if new_listings and not dry_run:
-            logger.info("\nStep 4: Sending notifications...")
+            logger.info("\nStep 5: Sending notifications...")
             notified_count = self.notifier.send_notifications(new_listings)
 
             # Mark listings as notified

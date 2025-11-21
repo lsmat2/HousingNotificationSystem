@@ -106,6 +106,16 @@ class Config:
         """Get maximum bathrooms."""
         return self.get('search_criteria.bathrooms.max')
 
+    @property
+    def min_square_feet(self) -> Optional[int]:
+        """Get minimum square feet."""
+        return self.get('search_criteria.square_feet.min')
+
+    @property
+    def max_square_feet(self) -> Optional[int]:
+        """Get maximum square feet."""
+        return self.get('search_criteria.square_feet.max')
+
     # Scraper Settings Properties
     @property
     def check_interval_minutes(self) -> int:
@@ -129,6 +139,26 @@ class Config:
             'scraper_settings.user_agent',
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         )
+
+    @property
+    def headless(self) -> bool:
+        """Get headless browser mode setting."""
+        return self.get('scraper_settings.headless', True)
+
+    @property
+    def parallel_neighborhoods(self) -> bool:
+        """Get parallel neighborhood scraping setting."""
+        return self.get('scraper_settings.parallel_neighborhoods', True)
+
+    @property
+    def detail_page_delay_min(self) -> int:
+        """Get minimum delay between detail page requests (seconds)."""
+        return self.get('scraper_settings.detail_page_delay_min', 5)
+
+    @property
+    def detail_page_delay_max(self) -> int:
+        """Get maximum delay between detail page requests (seconds)."""
+        return self.get('scraper_settings.detail_page_delay_max', 10)
 
     # Notification Settings Properties
     @property
